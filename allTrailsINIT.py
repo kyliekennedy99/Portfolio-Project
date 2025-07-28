@@ -55,7 +55,7 @@ def initDatabase(server,database):
 def main():
 
     csvFile = "gpx-tracks-from-hikr.org.csv"
-    server = "Alex"
+    server = "DESKTOP-BJDG4CK\\SQLEXPRESS" 
     database = "allTrails"
 
     # only ODBC Driver 17 for SQL Server seems to work for the large gpx column
@@ -88,7 +88,8 @@ def main():
         cursor.execute("CREATE TABLE kaggleTable (_id varchar(255) PRIMARY KEY, length_3d float,username varchar(255),start_time datetime2, max_elevation float, bounds varchar(4000), uphill float, moving_time float, end_time datetime2, max_speed float, gpx nvarchar(MAX), difficulty varchar(255), min_elevation float, url varchar(255), downhill float, name varchar(255), length_2d float);")
 
     # Increase the CSV parser's field size limit to the max allowed (gpx is too large)
-    csv.field_size_limit(sys.maxsize)
+    csv.field_size_limit(2**31 - 1)
+
 
     # Load the initial staging Kaggle file into the sql server reading csv line by line
     with open(csvFile, newline='', encoding='utf-8') as f:
