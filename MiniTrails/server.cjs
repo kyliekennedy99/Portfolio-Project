@@ -5,7 +5,6 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 
-// SQL Server config (must be defined before any queries)
 const sqlConfig = {
   server: 'DESKTOP-BJDG4CK\\SQLEXPRESS',
   database: 'allTrails',
