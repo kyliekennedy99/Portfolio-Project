@@ -117,10 +117,10 @@ public class BTreeMain {
                 String[] parts = line.split(",");
                 if (parts.length == 6) {
                     long studentId = Long.parseLong(parts[0]);
-                    int age = Integer.parseInt(parts[1]);
-                    String name = parts[2];
-                    String major = parts[3];
-                    String level = parts[4];
+                    String name = parts[1];
+                    String major = parts[2];
+                    String level = parts[3];
+                    int age = Integer.parseInt(parts[4]);
                     long recordID = Long.parseLong(parts[5]);
                     Student student = new Student(studentId, age, name, major, level, recordID);
                     studentList.add(student);
