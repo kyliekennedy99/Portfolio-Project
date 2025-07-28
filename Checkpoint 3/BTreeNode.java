@@ -33,13 +33,23 @@ class BTreeNode {
 
     // Constructor
     BTreeNode(int t, boolean leaf) {
-        this.t = t;
-        this.leaf = leaf;
-        this.keys = new long[2 * t];
+        this.t        = t;
+        this.leaf     = leaf;
+        this.keys     = new long[2 * t];
+        this.values   = new long[2 * t];
         this.children = new BTreeNode[2 * t + 1];
-        this.n = 0;
-        this.next = null;
-        this.values = new long[2 * t];
+        this.n        = 0;
+        this.next     = null;
     }
 
+    // Helper search
+    long search(long k) {
+        int i = 0;
+        while (i < n && k > keys[i]) i++;
+
+        if (leaf) {
+            return (i < n && keys[i] == k) ? values[i] : -1;
+        }
+        return (children[i] != null) ? children[i].search(k) : -1;
+    }
 }

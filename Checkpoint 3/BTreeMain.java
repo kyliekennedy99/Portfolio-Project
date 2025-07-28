@@ -1,39 +1,38 @@
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Scanner;
 import java.util.Random;
+import java.util.Scanner;
 
 /**
- * Main Application.
+ * Main Application — *original skeleton preserved;
+ * added helpers are wrapped in  // --- ADD ---  blocks.*
  */
 public class BTreeMain {
 
     public static void main(String[] args) {
 
-        /** Read the input file -- input.txt */
+        /* Read the input file -- input.txt */
         Scanner scan = null;
         try {
-            scan = new Scanner(new File("src/input.txt"));
+            scan = new Scanner(new File("input.txt"));
         } catch (FileNotFoundException e) {
             System.out.println("File not found.");
+            return;
         }
 
-        /** Read the minimum degree of B+Tree first */
-
+        /* Read the minimum degree of B+Tree first */
         int degree = scan.nextInt();
-
         BTree bTree = new BTree(degree);
 
-        /** Reading the database student.csv into B+Tree Node*/
-        List<Student> studentsDB = getStudents();
+        /* ----------------- ADD:  load existing students ------------- */
+        for (Student s : getStudents()) bTree.insert(s);
+        /* ------------------------------------------------------------ */
 
-        for (Student s : studentsDB) {
-            bTree.insert(s);
-        }
-
-        /** Start reading the operations now from input file*/
+        /* Start reading the operations now from input file*/
         try {
             while (scan.hasNextLine()) {
                 Scanner s2 = new Scanner(scan.nextLine());
@@ -45,56 +44,64 @@ public class BTreeMain {
                     switch (operation) {
                         case "insert": {
 
-                            long studentId = Long.parseLong(s2.next());
+                            long studentId   = Long.parseLong(s2.next());
                             String studentName = s2.next() + " " + s2.next();
-                            String major = s2.next();
-                            String level = s2.next();
-                            int age = Integer.parseInt(s2.next());
-                            /** TODO: Write a logic to generate recordID if it is not provided
-                             *        If it is provided, use the provided value
-                            */
+                            String major     = s2.next();
+                            String level     = s2.next();
+                            int    age       = Integer.parseInt(s2.next());
+
+                            /* ------------ ADD: generate or read RecordID ---- */
                             long recordID;
-                            try {
-                                recordID = Long.parseLong(s2.next());
-                                if(recordID <= 0) {
-                                    recordID = new Random().nextLong();
-                                }
-                            } catch (NumberFormatException e) {
-                                recordID = new Random().nextLong();
+                            if (s2.hasNextLong()) {
+                                recordID = s2.nextLong();
+                            } else {
+                                recordID = randomPositive();
                             }
-                            
-                            Student s = new Student(studentId, age, studentName, major, level, recordID);
+                            /* ------------------------------------------------ */
+
+                            Student s = new Student(studentId, age,
+                                                    studentName, major,
+                                                    level, recordID);
                             bTree.insert(s);
 
+                            /* ------------ ADD: persist to CSV --------------- */
+                            appendRow(s, "Student.csv");
+                            /* ------------------------------------------------ */
                             break;
                         }
+
                         case "delete": {
                             long studentId = Long.parseLong(s2.next());
                             boolean result = bTree.delete(studentId);
-                            if (result)
+                            if (result) {
                                 System.out.println("Student deleted successfully.");
-                            else
+                                /* ---- ADD: reflect deletion in CSV ---------- */
+                                removeRow(studentId, "Student.csv");
+                                /* ------------------------------------------- */
+                            } else
                                 System.out.println("Student deletion failed.");
-
                             break;
                         }
+
                         case "search": {
                             long studentId = Long.parseLong(s2.next());
-                            long recordID = bTree.search(studentId);
+                            long recordID  = bTree.search(studentId);
                             if (recordID != -1)
-                                System.out.println("Student exists in the database at " + recordID);
+                                System.out.println(
+                                   "Student exists in the database at " + recordID);
                             else
                                 System.out.println("Student does not exist.");
                             break;
                         }
+
                         case "print": {
-                            List<Long> listOfRecordID = new ArrayList<>();
-                            listOfRecordID = bTree.print();
-                            System.out.println("List of recordIDs in B+Tree " + listOfRecordID.toString());
+                            System.out.println("List of recordIDs in B+Tree "
+                                               + bTree.print());
+                            break;
                         }
+
                         default:
                             System.out.println("Wrong Operation");
-                            break;
                     }
                 }
             }
@@ -103,32 +110,60 @@ public class BTreeMain {
         }
     }
 
+    /* =========================  ADD SECTION  ========================= */
+
+    /** Load all rows from Student.csv (no header expected). */
     private static List<Student> getStudents() {
-
-        /** TODO:
-         * Extract the students information from "Student.csv"
-         * return the list<Students>
-         */
-
-        List<Student> studentList = new ArrayList<>();
+        List<Student> list = new ArrayList<>();
         try (Scanner s = new Scanner(new File("Student.csv"))) {
             while (s.hasNextLine()) {
-                String line = s.nextLine();
-                String[] parts = line.split(",");
-                if (parts.length == 6) {
-                    long studentId = Long.parseLong(parts[0]);
-                    String name = parts[1];
-                    String major = parts[2];
-                    String level = parts[3];
-                    int age = Integer.parseInt(parts[4]);
-                    long recordID = Long.parseLong(parts[5]);
-                    Student student = new Student(studentId, age, name, major, level, recordID);
-                    studentList.add(student);
-                }
+                String[] p = s.nextLine().split("\\s*,\\s*");
+                if (p.length != 6) continue;           // skip malformed
+                list.add(new Student(Long.parseLong(p[0]),
+                                     Integer.parseInt(p[4]),
+                                     p[1], p[2], p[3],
+                                     Long.parseLong(p[5])));
             }
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
+        } catch (FileNotFoundException ignore) { }     // empty DB is OK
+        return list;
+    }
+
+    /** Append one student row to Student.csv. */
+    private static void appendRow(Student st, String csv) {
+        try (FileWriter fw = new FileWriter(csv, true);
+             PrintWriter pw = new PrintWriter(fw)) {
+            pw.printf("%d,%s,%s,%s,%d,%d%n",
+                      st.studentId, st.studentName, st.major,
+                      st.level, st.age, st.recordId);
+        } catch (Exception e) {
+            System.out.println("CSV append failed: " + e.getMessage());
         }
-        return studentList;
+    }
+
+    /** Rewrite CSV without the row whose StudentID matches id. */
+    private static void removeRow(long id, String csv) {
+        List<String> keep = new ArrayList<>();
+        try (Scanner sc = new Scanner(new File(csv))) {
+            while (sc.hasNextLine()) {
+                String row = sc.nextLine();
+                if (!row.startsWith(id + ",")) keep.add(row);
+            }
+        } catch (FileNotFoundException ignore) { return; }
+
+        try (PrintWriter pw = new PrintWriter(csv)) {
+            for (String r : keep) pw.println(r);
+        } catch (Exception e) {
+            System.out.println("CSV rewrite failed: " + e.getMessage());
+        }
+    }
+
+    /** Positive random long — used when RecordID not provided. */
+    private static long randomPositive() {
+        long r; do { r = new Random().nextLong(); } while (r <= 0); return r;
+    }
+
+    /** Print helper for bad input lines. */
+    private static void warn(String line, String msg) {
+        System.out.println("Ignore line (“" + line + "”): " + msg);
     }
 }
