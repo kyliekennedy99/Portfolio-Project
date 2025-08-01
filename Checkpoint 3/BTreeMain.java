@@ -12,13 +12,15 @@ import java.util.Scanner;
  * added helpers are wrapped in  // --- ADD ---  blocks.*
  */
 public class BTreeMain {
+    public static final String STUDENT_CSV = "Student.csv";
+    public static final String INPUT_TXT = "src/input.txt";
 
     public static void main(String[] args) {
 
         /* Read the input file -- input.txt */
         Scanner scan = null;
         try {
-            scan = new Scanner(new File("input.txt"));
+            scan = new Scanner(new File(INPUT_TXT));
         } catch (FileNotFoundException e) {
             System.out.println("File not found.");
             return;
@@ -65,8 +67,9 @@ public class BTreeMain {
                             bTree.insert(s);
 
                             /* ------------ ADD: persist to CSV --------------- */
-                            appendRow(s, "Student.csv");
+                            appendRow(s, STUDENT_CSV);
                             /* ------------------------------------------------ */
+                            System.out.printf("Student inserted successfully (Id: %d).%n", s.studentId);
                             break;
                         }
 
@@ -74,12 +77,12 @@ public class BTreeMain {
                             long studentId = Long.parseLong(s2.next());
                             boolean result = bTree.delete(studentId);
                             if (result) {
-                                System.out.println("Student deleted successfully.");
+                                System.out.printf("Student deleted successfully (Id: %d).%n", studentId);
                                 /* ---- ADD: reflect deletion in CSV ---------- */
-                                removeRow(studentId, "Student.csv");
+                                removeRow(studentId, STUDENT_CSV);
                                 /* ------------------------------------------- */
                             } else
-                                System.out.println("Student deletion failed.");
+                                System.out.printf("Student deletion failed (Id: %d).%n", studentId);
                             break;
                         }
 
@@ -90,7 +93,7 @@ public class BTreeMain {
                                 System.out.println(
                                    "Student exists in the database at " + recordID);
                             else
-                                System.out.println("Student does not exist.");
+                                System.out.printf("Student does not exist (Id: %d).%n", studentId);
                             break;
                         }
 
@@ -104,10 +107,12 @@ public class BTreeMain {
                             System.out.println("Wrong Operation");
                     }
                 }
+                s2.close();
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
+        scan.close();
     }
 
     /* =========================  ADD SECTION  ========================= */
@@ -115,7 +120,7 @@ public class BTreeMain {
     /** Load all rows from Student.csv (no header expected). */
     private static List<Student> getStudents() {
         List<Student> list = new ArrayList<>();
-        try (Scanner s = new Scanner(new File("Student.csv"))) {
+        try (Scanner s = new Scanner(new File(STUDENT_CSV))) {
             while (s.hasNextLine()) {
                 String[] p = s.nextLine().split("\\s*,\\s*");
                 if (p.length != 6) continue;           // skip malformed
@@ -124,6 +129,7 @@ public class BTreeMain {
                                      p[1], p[2], p[3],
                                      Long.parseLong(p[5])));
             }
+            s.close();
         } catch (FileNotFoundException ignore) { }     // empty DB is OK
         return list;
     }
@@ -148,6 +154,7 @@ public class BTreeMain {
                 String row = sc.nextLine();
                 if (!row.startsWith(id + ",")) keep.add(row);
             }
+            sc.close();
         } catch (FileNotFoundException ignore) { return; }
 
         try (PrintWriter pw = new PrintWriter(csv)) {
@@ -163,7 +170,9 @@ public class BTreeMain {
     }
 
     /** Print helper for bad input lines. */
+    /*
     private static void warn(String line, String msg) {
         System.out.println("Ignore line (“" + line + "”): " + msg);
     }
+    */
 }

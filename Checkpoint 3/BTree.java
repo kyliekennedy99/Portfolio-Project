@@ -23,14 +23,22 @@ class BTree {
         this.t = t;
     }
 
+    /**
+     * Search in the B+Tree.
+     * Return recordID for the given StudentID.
+     * Otherwise, print out a message that the given studentId has not been found in the table and return -1.
+     */
     long search(long k) {
         if (root == null) {
             System.out.println("Tree is empty.");
             return -1;
         }
-        return root.search(k);
+        return root.search(k); // call the search method of the root node that returns the recordID
     }
 
+    /**
+     * Insert in the B+Tree.
+     */
     BTree insert(Student s) {
         long k = s.studentId, rid = s.recordId;
         if (root == null) {
@@ -48,21 +56,22 @@ class BTree {
         return this;
     }
     
+    // Split a child node into two nodes and update it's parent to include the new node
     private void splitChild(BTreeNode p, int idx, BTreeNode y) {
-        BTreeNode z = new BTreeNode(t, y.leaf);
+        BTreeNode z = new BTreeNode(t, y.leaf); //The new node being created
 
         /* move last t-1 keys (and children/values) from y → z */
         for (int j = 0; j < t - 1; j++)
             z.keys[j] = y.keys[j + t];
-        if (y.leaf) {
+        if (y.leaf) { // if leaf move values
             for (int j = 0; j < t - 1; j++)
                 z.values[j] = y.values[j + t];
             z.next = y.next; y.next = z;
-        } else {
+        } else { // if not leaf move children
             for (int j = 0; j < t; j++)
                 z.children[j] = y.children[j + t];
         }
-        z.n = t - 1; y.n = t - 1;
+        z.n = t - 1; y.n = t - 1; // update sizes
 
         /* parent p gets new child and separator key */
         for (int j = p.n; j > idx; j--) {
@@ -74,9 +83,10 @@ class BTree {
         p.n++;
     }
 
+    // Insert a key into a tree that doesn't have a full root node
     private void insertNonFull(BTreeNode x, long k, long rid) {
         int i = x.n - 1;
-        if (x.leaf) {
+        if (x.leaf) { // Base case: leaf node with space, insert the key directly
             while (i >= 0 && k < x.keys[i]) {
                 x.keys[i + 1] = x.keys[i];
                 x.values[i + 1] = x.values[i];
@@ -85,29 +95,33 @@ class BTree {
             x.keys[i + 1] = k; x.values[i + 1] = rid; x.n++;
             return;
         }
-        while (i >= 0 && k < x.keys[i]) i--;
+        while (i >= 0 && k < x.keys[i]) i--; // Find the Btree index for the key we are inserting
         i++;
-        if (x.children[i].n == 2 * t - 1) {
+        if (x.children[i].n == 2 * t - 1) { // If the child we are going to insert into is full, we need to split it first
             splitChild(x, i, x.children[i]);
             if (k > x.keys[i]) i++;
         }
-        insertNonFull(x.children[i], k, rid);
+        insertNonFull(x.children[i], k, rid); // Recursive call to insert the key into the appropriate child node
     }
 
+    /**
+     * Delete in the B+Tree.
+     * Return true if the student is deleted successfully otherwise, return false.
+     */
     boolean delete(long k) {
-        if (root == null) return false;
-        boolean removed = deleteInternal(root, k);
+        if (root == null) return false; // nothing to delete if root is null
+        boolean removed = deleteInternal(root, k); // call the recursive delete method
 
-        if (root.n == 0 && !root.leaf)          // shrink height
+        if (root.n == 0 && !root.leaf) // if we need to shrink height
             root = root.children[0];
-        if (root != null && root.n == 0) root = null;
+        if (root != null && root.n == 0) root = null; // if tree is empty after deletion, set root to null
         return removed;
     }
 
     /* recursive delete that guarantees child has ≥ t keys before descent */
     private boolean deleteInternal(BTreeNode x, long k) {
 
-        int idx = findKey(x, k);
+        int idx = findKey(x, k); // Find the index in the BTree Node for the key k
 
         /* ---------- CASE 1: key present in this node ---------- */
         if (idx < x.n && x.keys[idx] == k) {
@@ -144,23 +158,24 @@ class BTree {
 
         if (predChild.n >= t) {                 // borrow predecessor
             long predKey = getPredecessor(predChild);
-            long predVal = getPredVal(predChild);
+            //long predVal = getPredVal(predChild);
             x.keys[idx] = predKey;
             return deleteInternal(predChild, predKey);
         }
         else if (succChild.n >= t) {            // borrow successor
             long succKey = getSuccessor(succChild);
-            long succVal = succChild.values[0];
+            //long succVal = succChild.values[0];
             x.keys[idx] = succKey;
             return deleteInternal(succChild, succKey);
         }
         else {                                  // merge the two children
             merge(x, idx);
             return deleteInternal(predChild, key);
+        }
     }
-}
 
     // Helper methods
+    // Find the index of the first key greater than or equal to key k
     private int findKey(BTreeNode x, long k) {
         int idx = 0;
         while (idx < x.n && x.keys[idx] < k) idx++;
@@ -171,10 +186,10 @@ class BTree {
         while (!x.leaf) x = x.children[x.n];
         return x.keys[x.n - 1];
     }
-    private long getPredVal(BTreeNode x) {
+    /*private long getPredVal(BTreeNode x) {
         while (!x.leaf) x = x.children[x.n];
         return x.values[x.n - 1];
-    }
+    }*/
 
     private long getSuccessor(BTreeNode x) {
         while (!x.leaf) x = x.children[0];
@@ -191,6 +206,7 @@ class BTree {
             merge(x, idx < x.n ? idx : idx - 1);
     }
 
+    // Move an entry from the previous sibling to the current node
     private void borrowFromPrev(BTreeNode x, int idx) {
         BTreeNode child = x.children[idx];
         BTreeNode sib   = x.children[idx - 1];
@@ -216,6 +232,7 @@ class BTree {
         sib.n--;
     }
 
+    // Move an entry from the next sibling to the current node
     private void borrowFromNext(BTreeNode x, int idx) {
         BTreeNode child = x.children[idx];
         BTreeNode sib   = x.children[idx + 1];
@@ -244,6 +261,7 @@ class BTree {
         sib.n--;
     }
 
+    // Merges the child at index idx of the current node with its right sibling and updates the parent
     private void merge(BTreeNode x, int idx) {
         BTreeNode child = x.children[idx];
         BTreeNode sib   = x.children[idx + 1];
@@ -272,6 +290,10 @@ class BTree {
         x.n--;
     }
 
+    /**
+     * Print the B+Tree.
+     * Return a list of recordIDs from left to right of leaf nodes.
+     */
     List<Long> print() {
         List<Long> ids = new ArrayList<>();
         if (root == null) return ids;
