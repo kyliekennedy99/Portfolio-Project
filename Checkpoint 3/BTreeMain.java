@@ -12,7 +12,7 @@ import java.util.Scanner;
  * added helpers are wrapped in  // --- ADD ---  blocks.*
  */
 public class BTreeMain {
-    public static final String STUDENT_CSV = "Student.csv";
+    public static final String STUDENT_CSV = "src/Student.csv";
     public static final String INPUT_TXT = "src/input.txt";
 
     public static void main(String[] args) {
