@@ -15,8 +15,8 @@ const cors = require("cors");
 const app = express();
 app.use(
   cors({
-    origin: "http://localhost:5173",   // 👈 same origin the browser runs on
-    credentials: false                // keep false while you don’t need cookies
+    origin: "http://localhost:5173",   
+    credentials: false               
   })
 );
 
@@ -473,7 +473,7 @@ app.post("/api/register", async (req, res) => {
     await pool.request()
       .input("Name",     sql.NVarChar(255), name)
       .input("Email",    sql.NVarChar(255), email)
-      .input("Password", sql.NVarChar(255), password)  // ⚠️ not hashed (yet)
+      .input("Password", sql.NVarChar(255), password)  
       .execute("dbo.CreateUserAccount");
 
     res.sendStatus(201);
@@ -501,7 +501,7 @@ app.post('/api/users/update-profile', async (req, res) => {
       .input("Age",            sql.Int,           age || null)
       .input("Nationality",    sql.NVarChar(100), nationality || null)
       .input("Gender",         sql.NVarChar(20),  gender || null)
-      .input("ExperienceLevel",sql.NVarChar(100), experienceLevel || null)  // ✅ ADD THIS LINE
+      .input("ExperienceLevel",sql.NVarChar(100), experienceLevel || null)  
       .execute("dbo.UpdateUserProfile");
 
     res.sendStatus(200);
@@ -534,3 +534,4 @@ app.get("/api/users/:id", async (req, res) => {
 // ---------------------------------------------------------------------------
 const PORT = 3001;
 app.listen(PORT, () => console.log(`API server running at http://localhost:${PORT}`));
+
