@@ -75,3 +75,11 @@ npm i @tanstack/react-query
 FOR EASY SETUP IN SSMS;
 - I included db.bacpac which is what I did in SSMS
 - Copy it locally and you can use SSMS Import Wizard to open it on your computer
+
+File Organization:
+- src
+  - api
+    - api.js
+  - components
+    - anything with Page or Panel in name
+- server.cjs
