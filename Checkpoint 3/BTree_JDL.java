@@ -161,7 +161,7 @@ class BTree {
         */
 
         boolean returnVal = deleteInternal(x.children[idx], k);
-        if (x.children[idx].n < t && root.children[0] != null) { // if underflows and not root node, re-balance
+        if (x.children[idx].n < t && x.leaf==true) { // if underflows and not root node, re-balance
             fill(x, idx);
         }
         return returnVal;
