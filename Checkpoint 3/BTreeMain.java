@@ -43,6 +43,9 @@ public class BTreeMain {
 
                     String operation = s2.next();
 
+                    printTree(bTree); // Print the current state of the B+Tree
+                    System.out.println("List of recordIDs in B+Tree "+ bTree.print());
+
                     switch (operation) {
                         case "insert": {
 
@@ -175,4 +178,59 @@ public class BTreeMain {
         System.out.println("Ignore line (“" + line + "”): " + msg);
     }
     */
+
+    private static void printTree(BTree bTree) {
+        if (bTree == null) {
+            System.out.println("Tree is empty.");
+            return;
+        }
+        
+        BTreeNode root = bTree.getRoot();
+        if (root == null) {
+            System.out.println("Tree is empty.");
+            return;
+        }
+        
+        System.out.println("B+Tree Structure:");
+        printTreeHelper(root, 0);
+    }
+    
+    // Recursive helper to print all nodes
+    private static void printTreeHelper(BTreeNode node, int level) {
+        if (node == null) return;
+        
+        // Print indentation for tree structure visualization
+        String indent = "  ".repeat(level);
+        
+        System.out.printf("%sLevel %d %s: ", indent, level, node.leaf ? "(Leaf)" : "(Internal)");
+        
+        // Print all keys in this node
+        System.out.print("Keys[");
+        for (int i = 0; i < node.n; i++) {
+            System.out.print(node.keys[i]);
+            if (i < node.n - 1) System.out.print(", ");
+        }
+        System.out.print("]");
+        
+        // If it's a leaf node, also print the values (recordIDs)
+        if (node.leaf) {
+            System.out.print(" Values[");
+            for (int i = 0; i < node.n; i++) {
+                System.out.print(node.values[i]);
+                if (i < node.n - 1) System.out.print(", ");
+            }
+            System.out.print("]");
+        }
+        
+        System.out.println(); // New line after each node
+        
+        // Recursively print children (if internal node)
+        if (!node.leaf) {
+            for (int i = 0; i <= node.n; i++) {
+                if (node.children[i] != null) {
+                    printTreeHelper(node.children[i], level + 1);
+                }
+            }
+        }
+    }
 }

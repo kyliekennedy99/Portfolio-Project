@@ -74,9 +74,9 @@ class BTree {
                 z.values[j] = y.values[j + t];
             z.next = y.next; y.next = z;
         } else { // if not leaf move children
-            for (int j = 0; j < t; j++) 
+            for (int j = 0; j < t+1; j++) 
                 z.children[j] = y.children[j + t];
-            z.n--; y.n--; // if not leaf node, size needs to be one less
+            y.n--; // if not leaf node, size needs to be one less
         }
         //z.n = t - 1; y.n = t - 1; // update sizes
 
@@ -125,6 +125,7 @@ class BTree {
         if (root.n == 0 && !root.leaf) // if we need to shrink height
             root = root.children[0];
         if (root != null && root.n == 0) root = null; // if tree is empty after deletion, set root to null
+        //System.out.println("List of recordIDs in B+Tree " + this.print()); // print all the records
         return removed;
     }
 
@@ -167,7 +168,7 @@ class BTree {
     }
 
     /* remove key that is definitely in internal node x at index idx */
-    private boolean deleteFromInternal(BTreeNode x, int idx) {
+    private boolean deleteFromInternal(BTreeNode x, int idx) { //Delete from internal node isn't working correctly
 
         long key = x.keys[idx];                 // ← capture the key once
 
@@ -289,13 +290,13 @@ class BTree {
 
         /* copy keys & children from sib → child */
         for (int i = 0; i < sib.n; i++)
-            child.keys[i + t] = sib.keys[i];
+            child.keys[i + child.n] = sib.keys[i];
         if (!child.leaf) {
             for (int i = 0; i <= sib.n; i++)
-                child.children[i + t] = sib.children[i];
+                child.children[i + child.n] = sib.children[i];
         } else {
             for (int i = 0; i < sib.n; i++)
-                child.values[i + t] = sib.values[i];
+                child.values[i + child.n] = sib.values[i];
             child.next = sib.next;          // link leaf list
         }
         child.n += sib.n;
@@ -322,5 +323,12 @@ class BTree {
             cur = cur.next;
         }
         return ids;
+    }
+    
+    /**
+     * Get the root node for external access (for printing tree structure).
+     */
+    BTreeNode getRoot() {
+        return root;
     }
 }
