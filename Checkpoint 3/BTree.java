@@ -46,13 +46,14 @@ class BTree {
             root.keys[0] = k; root.values[0] = rid; root.n = 1;
             return this;
         }
-        if (root.n == 2 * t - 1) {                 // root full → split
+        if (root.n == 2 * t) {                 // root full → split
             BTreeNode r = new BTreeNode(t, false);
             r.children[0] = root;
             splitChild(r, 0, root);
             root = r;
         }
         insertNonFull(root, k, rid);
+        //System.out.println("List of recordIDs in B+Tree " + this.print()); // print all the records
         return this;
     }
     
@@ -61,17 +62,19 @@ class BTree {
         BTreeNode z = new BTreeNode(t, y.leaf); //The new node being created
 
         /* move last t-1 keys (and children/values) from y → z */
-        for (int j = 0; j < t - 1; j++)
+        for (int j = 0; j < t; j++) {
             z.keys[j] = y.keys[j + t];
+            z.n++; y.n--; // update sizes
+        }
         if (y.leaf) { // if leaf move values
-            for (int j = 0; j < t - 1; j++)
+            for (int j = 0; j < t; j++)
                 z.values[j] = y.values[j + t];
             z.next = y.next; y.next = z;
         } else { // if not leaf move children
-            for (int j = 0; j < t; j++)
+            for (int j = 0; j < t+1; j++) 
                 z.children[j] = y.children[j + t];
+            y.n--; // if not leaf node, size needs to be one less
         }
-        z.n = t - 1; y.n = t - 1; // update sizes
 
         /* parent p gets new child and separator key */
         for (int j = p.n; j > idx; j--) {
@@ -97,7 +100,7 @@ class BTree {
         }
         while (i >= 0 && k < x.keys[i]) i--; // Find the Btree index for the key we are inserting
         i++;
-        if (x.children[i].n == 2 * t - 1) { // If the child we are going to insert into is full, we need to split it first
+        if (x.children[i].n == 2 * t) { // If the child we are going to insert into is full, we need to split it first
             splitChild(x, i, x.children[i]);
             if (k > x.keys[i]) i++;
         }
@@ -110,67 +113,70 @@ class BTree {
      */
     boolean delete(long k) {
         if (root == null) return false; // nothing to delete if root is null
-        boolean removed = deleteInternal(root, k); // call the recursive delete method
+        //boolean removed = deleteInternal(root, k); // call the recursive delete method
+        boolean removed = deleteInternal(null, root, k, new BTreeNode[1]); // call the recursive delete method
 
         if (root.n == 0 && !root.leaf) // if we need to shrink height
             root = root.children[0];
         if (root != null && root.n == 0) root = null; // if tree is empty after deletion, set root to null
+        //System.out.println("List of recordIDs in B+Tree " + this.print()); // print all the records
         return removed;
     }
 
-    /* recursive delete that guarantees child has ≥ t keys before descent */
-    private boolean deleteInternal(BTreeNode x, long k) {
-
-        int idx = findKey(x, k); // Find the index in the BTree Node for the key k
-
-        /* ---------- CASE 1: key present in this node ---------- */
-        if (idx < x.n && x.keys[idx] == k) {
-            if (x.leaf) {                    // 1a: leaf => remove directly
-                for (int i = idx; i < x.n - 1; i++) {
-                    x.keys[i] = x.keys[i + 1];
-                    x.values[i] = x.values[i + 1];
+    /*    Delete take 2 */
+    private boolean deleteInternal(BTreeNode parent, BTreeNode node,long key, BTreeNode[] oldChild) {
+        int idx = findKey(node, key); // Find the index in the BTree Node for the key k
+        if(node.leaf) {
+            // If leaf node, remove key directly
+            if (idx < node.n && node.keys[idx] == key) {
+                for (int i = idx; i < node.n - 1; i++) {
+                    node.keys[i] = node.keys[i + 1];
+                    node.values[i] = node.values[i + 1];
                 }
-                x.n--;
+                node.n--;
+                if (parent != null) {
+                    int idxParent = findKey(parent, key);
+                    if (node.n < t && parent != null) { // if underflows and not root node, re-balance
+                        if (idxParent > 0 && parent.children[idxParent - 1].n > t) {
+                            borrowFromPrev(parent, idxParent);
+                            oldChild[0] = null;
+                        } else if (idxParent < parent.n && parent.children[idxParent + 1].n > t) {
+                            borrowFromNext(parent, idxParent);
+                            oldChild[0] = null;
+                        } else {
+                            int indexToMerge = (idxParent < parent.n ? idxParent : idxParent - 1);
+                            merge(parent, indexToMerge);
+                            oldChild[0] = parent.children[indexToMerge + 1]; //node to delete
+                        }
+                    }
+                    //if (idxParent < parent.n) {
+                    //   parent.keys[idxParent] = node.keys[node.n - 1]; //move new last key up to parent
+                    //}
+                }
                 return true;
+            } else { return false; } // If key not found in leaf, we can just return false
+        } else { // If not leaf, continue down the tree
+            boolean deleted  = deleteInternal(node, node.children[idx], key, oldChild);
+            if (parent != null) {
+                int idxParent = findKey(parent, key);
+                if (oldChild[0] != null && node.n < t) {
+                    if (idxParent > 0 && parent.children[idxParent - 1].n > t) {
+                        borrowFromPrev(parent, idxParent);
+                        oldChild[0] = null;
+                    } else if (idxParent < parent.n && parent.children[idxParent + 1].n > t) {
+                        borrowFromNext(parent, idxParent);
+                        oldChild[0] = null;
+                    } else {
+                        int indexToMerge = (idxParent < parent.n ? idxParent : idxParent - 1);
+                        merge(parent, indexToMerge);
+                        oldChild[0] = parent.children[indexToMerge + 1]; //node to delete
+                    }
+                }
+                //if (idxParent < parent.n) {
+                //    parent.keys[idxParent] = node.keys[node.n - 1]; //move new last key up to parent
+                //}
             }
-            /* 1b: internal node */
-            return deleteFromInternal(x, idx);
-        }
-
-        /* ---------- CASE 2: key only in subtree ---------------- */
-        if (x.leaf) return false;            // not found
-
-        /* ensure child[idx] has ≥ t keys before recursing */
-        boolean flag = (idx == x.n);         // was last child?
-        if (x.children[idx].n < t)
-            fill(x, idx);
-        int nextIdx = flag && idx > x.n ? idx - 1 : idx;
-        return deleteInternal(x.children[nextIdx], k);
-    }
-
-    /* remove key that is definitely in internal node x at index idx */
-    private boolean deleteFromInternal(BTreeNode x, int idx) {
-
-        long key = x.keys[idx];                 // ← capture the key once
-
-        BTreeNode predChild = x.children[idx];
-        BTreeNode succChild = x.children[idx + 1];
-
-        if (predChild.n >= t) {                 // borrow predecessor
-            long predKey = getPredecessor(predChild);
-            //long predVal = getPredVal(predChild);
-            x.keys[idx] = predKey;
-            return deleteInternal(predChild, predKey);
-        }
-        else if (succChild.n >= t) {            // borrow successor
-            long succKey = getSuccessor(succChild);
-            //long succVal = succChild.values[0];
-            x.keys[idx] = succKey;
-            return deleteInternal(succChild, succKey);
-        }
-        else {                                  // merge the two children
-            merge(x, idx);
-            return deleteInternal(predChild, key);
+            return deleted;
         }
     }
 
@@ -180,30 +186,6 @@ class BTree {
         int idx = 0;
         while (idx < x.n && x.keys[idx] < k) idx++;
         return idx;
-    }
-
-    private long getPredecessor(BTreeNode x) {
-        while (!x.leaf) x = x.children[x.n];
-        return x.keys[x.n - 1];
-    }
-    /*private long getPredVal(BTreeNode x) {
-        while (!x.leaf) x = x.children[x.n];
-        return x.values[x.n - 1];
-    }*/
-
-    private long getSuccessor(BTreeNode x) {
-        while (!x.leaf) x = x.children[0];
-        return x.keys[0];
-    }
-
-    /* make sure child[idx] has ≥ t keys */
-    private void fill(BTreeNode x, int idx) {
-        if (idx > 0 && x.children[idx - 1].n >= t)
-            borrowFromPrev(x, idx);
-        else if (idx < x.n && x.children[idx + 1].n >= t)
-            borrowFromNext(x, idx);
-        else
-            merge(x, idx < x.n ? idx : idx - 1);
     }
 
     // Move an entry from the previous sibling to the current node
@@ -219,14 +201,14 @@ class BTree {
         if (!child.leaf) {
             for (int i = child.n; i >= 0; i--)
                 child.children[i + 1] = child.children[i];
-        }
-        /* move sep key from x down to child */
-        child.keys[0] = x.keys[idx - 1];
-        if (!child.leaf)
+            child.keys[0] = x.keys[idx-1]; //move seperator key down to sib
             child.children[0] = sib.children[sib.n];
-
-        /* move sib's last key up to parent */
-        x.keys[idx - 1] = sib.keys[sib.n - 1];
+            x.keys[idx-1] = sib.keys[sib.n - 1];
+        } else {
+            child.keys[0] = sib.keys[sib.n - 1];
+            child.values[0] = sib.values[sib.n - 1];
+            x.keys[idx-1] = sib.keys[sib.n - 2];
+        }
 
         child.n++;
         sib.n--;
@@ -238,11 +220,13 @@ class BTree {
         BTreeNode sib   = x.children[idx + 1];
 
         /* bring sep key down to child */
-        child.keys[child.n] = x.keys[idx];
-        if (!child.leaf)
+        if (!child.leaf) {
+            child.keys[child.n] = x.keys[idx];
             child.children[child.n + 1] = sib.children[0];
-        if (child.leaf)
+        } else {
+            child.keys[child.n] = sib.keys[0];
             child.values[child.n] = sib.values[0];
+        }
 
         /* move sib's first key up to parent */
         x.keys[idx] = sib.keys[0];
@@ -259,6 +243,11 @@ class BTree {
 
         child.n++;
         sib.n--;
+
+        /* move new last key up to parent */
+        //x.keys[idx] = child.keys[child.n - 1];
+        //if (x.n < idx) 
+        //    x.keys[idx + 1] = sib.keys[sib.n - 1];
     }
 
     // Merges the child at index idx of the current node with its right sibling and updates the parent
@@ -267,20 +256,25 @@ class BTree {
         BTreeNode sib   = x.children[idx + 1];
 
         /* pull separator key from parent into child */
-        child.keys[t - 1] = x.keys[idx];
+        //child.keys[t - 1] = x.keys[idx]; This does nothing, overwites a value with the same value
 
         /* copy keys & children from sib → child */
-        for (int i = 0; i < sib.n; i++)
-            child.keys[i + t] = sib.keys[i];
         if (!child.leaf) {
-            for (int i = 0; i <= sib.n; i++)
-                child.children[i + t] = sib.children[i];
-        } else {
+            child.keys[child.n] = x.keys[idx]; // move the separator key down to the child
+            child.n++;
             for (int i = 0; i < sib.n; i++)
-                child.values[i + t] = sib.values[i];
+                child.keys[i + child.n] = sib.keys[i];
+            for (int i = 0; i <= sib.n; i++) // copy children from sib to child
+                child.children[i + child.n] = sib.children[i];
+        }
+        else {
+            for (int i = 0; i < sib.n; i++)
+                child.keys[i + child.n] = sib.keys[i];
+            for (int i = 0; i < sib.n; i++)
+                child.values[i + child.n] = sib.values[i];
             child.next = sib.next;          // link leaf list
         }
-        child.n += sib.n + 1;
+        child.n += sib.n;
 
         /* remove sib and key from parent */
         for (int i = idx + 1; i < x.n; i++) {
@@ -288,6 +282,10 @@ class BTree {
             x.children[i] = x.children[i + 1];
         }
         x.n--;
+
+        
+        if (x.n < idx) 
+            x.keys[idx] = child.keys[child.n - 1]; // Update parent key to be child final key
     }
 
     /**
@@ -304,5 +302,12 @@ class BTree {
             cur = cur.next;
         }
         return ids;
+    }
+    
+    /**
+     * Get the root node for external access (for printing tree structure).
+     */
+    BTreeNode getRoot() {
+        return root;
     }
 }

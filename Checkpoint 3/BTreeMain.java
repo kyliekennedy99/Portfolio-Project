@@ -43,9 +43,6 @@ public class BTreeMain {
 
                     String operation = s2.next();
 
-                    printTree(bTree); // Print the current state of the B+Tree
-                    System.out.println("List of recordIDs in B+Tree "+ bTree.print());
-
                     switch (operation) {
                         case "insert": {
 
@@ -118,8 +115,6 @@ public class BTreeMain {
         scan.close();
     }
 
-    /* =========================  ADD SECTION  ========================= */
-
     /** Load all rows from Student.csv (no header expected). */
     private static List<Student> getStudents() {
         List<Student> list = new ArrayList<>();
@@ -172,13 +167,7 @@ public class BTreeMain {
         long r; do { r = new Random().nextLong(); } while (r <= 0); return r;
     }
 
-    /** Print helper for bad input lines. */
-    /*
-    private static void warn(String line, String msg) {
-        System.out.println("Ignore line (“" + line + "”): " + msg);
-    }
-    */
-
+    /* Debugging function to Print the entire B+Tree structure. */
     private static void printTree(BTree bTree) {
         if (bTree == null) {
             System.out.println("Tree is empty.");
