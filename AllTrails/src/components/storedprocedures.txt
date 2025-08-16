@@ -1,0 +1,121 @@
+CREATE OR ALTER PROCEDURE dbo.AddReview
+    @userId      BIGINT,
+    @trailId     BIGINT,
+    @rating      DECIMAL(3,1),
+    @difficulty  VARCHAR(20) = NULL,
+    @comment     NVARCHAR(1000) = NULL,
+    @reviewDate  DATETIME2     = NULL      -- allow caller override
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET @reviewDate = ISNULL(@reviewDate, SYSUTCDATETIME());
+
+    BEGIN TRY
+        BEGIN TRAN;          -- ----------
+
+        INSERT INTO dbo.Review
+              (UserID, TrailID, Rating, Difficulty, Comment, ReviewDate)
+        VALUES(@userId, @trailId, @rating, @difficulty, @comment, @reviewDate);
+
+        /* Optional: keep a cached AvgRating column in Trail */
+        IF COL_LENGTH('dbo.Trail', 'AvgRating') IS NOT NULL
+        BEGIN
+            DECLARE @newAvg DECIMAL(4,2);
+            SELECT @newAvg = AVG(Rating)
+            FROM   dbo.Review
+            WHERE  TrailID = @trailId;
+
+            UPDATE dbo.Trail SET AvgRating = @newAvg
+            WHERE  TrailID = @trailId;
+        END
+
+        COMMIT;              -- ----------
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK;
+        THROW;
+    END CATCH
+END
+GO
+
+
+CREATE OR ALTER PROCEDURE dbo.GetClubLeaderboard
+    @clubId INT,
+    @topN   INT = 10
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT TOP (@topN)
+           U.UserID,
+           U.Name,
+           SUM(T.Length3D) AS totalMeters,
+           ROUND(SUM(T.Length3D)/1609.34,2) AS totalMiles
+    FROM   dbo.Member M                     -- club membership
+    JOIN   dbo.Users  U  ON U.UserID = M.UserID
+    JOIN   dbo.Hiker  H  ON H.UserID = U.UserID
+    JOIN   dbo.Hike   HI ON HI.HikeID = H.HikeID
+    JOIN   dbo.Trail  T  ON T.TrailID = HI.TrailID
+    WHERE  M.ClubID = @clubId
+    GROUP  BY U.UserID, U.Name
+    HAVING SUM(T.Length3D) > 0
+    ORDER  BY totalMeters DESC;
+END
+GO
+
+CREATE OR ALTER PROCEDURE dbo.MonthlyTrailStats
+    @trailId     BIGINT,
+    @monthsBack  INT = 12
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    ;WITH RangeHikes AS (
+        SELECT H.HikeID,
+               FORMAT(H.StartTime,'yyyy-MM') AS YearMonth
+        FROM   dbo.Hike H
+        WHERE  H.TrailID   = @trailId
+          AND  H.StartTime >= DATEADD(MONTH, -@monthsBack, SYSUTCDATETIME())
+    ),
+    RangeReviews AS (
+        SELECT R.ReviewID,
+               FORMAT(R.ReviewDate,'yyyy-MM') AS YearMonth,
+               R.Rating
+        FROM   dbo.Review R
+        WHERE  R.TrailID    = @trailId
+          AND  R.ReviewDate >= DATEADD(MONTH, -@monthsBack, SYSUTCDATETIME())
+    )
+    SELECT Y.YearMonth,
+           COUNT(DISTINCT H.HikeID)      AS numHikes,
+           COUNT(R.ReviewID)             AS numReviews,
+           AVG(R.Rating)                 AS avgRating
+    FROM  (SELECT DISTINCT YearMonth FROM RangeHikes
+           UNION
+           SELECT DISTINCT YearMonth FROM RangeReviews) Y
+    LEFT JOIN RangeHikes  H ON H.YearMonth = Y.YearMonth
+    LEFT JOIN RangeReviews R ON R.YearMonth = Y.YearMonth
+    GROUP BY Y.YearMonth
+    ORDER BY Y.YearMonth;
+END
+GO
+
+CREATE OR ALTER PROCEDURE dbo.CreateUserAccount
+    @Name     NVARCHAR(255),
+    @Email    NVARCHAR(255),
+    @Password NVARCHAR(255)   -- assume this is hashed already
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- 1. Check for duplicate email
+    IF EXISTS (SELECT 1 FROM dbo.Users WHERE Email = @Email)
+    BEGIN
+        RAISERROR('Email already in use.', 16, 1);
+        RETURN;
+    END
+
+    -- 2. Insert the user
+    INSERT INTO dbo.Users (Name, Email, Password)
+    VALUES (@Name, @Email, @Password);
+END;
+

@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* custom tweaks */
+body {
+  @apply text-gray-800;
+  
+}
+.leaflet-control-attribution {
+  display: none;
+}
+
+/* Reset Leaflet default cluster styles */
+.custom-cluster {
+  background: transparent;
+  border: none;
+}
+
+/* Shared style */
+.cluster-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: white;
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(0,0,0,0.5);
+}
+
+/* Size and color based on count */
+.cluster-icon.small {
+  width: 30px;
+  height: 30px;
+  background-color: #38bdf8; /* sky-400 */
+  font-size: 0.75rem;
+}
+
+.cluster-icon.medium {
+  width: 40px;
+  height: 40px;
+  background-color: #0ea5e9; /* sky-500 */
+  font-size: 0.875rem;
+}
+
+.cluster-icon.large {
+  width: 50px;
+  height: 50px;
+  background-color: #0284c7; /* sky-600 */
+  font-size: 1rem;
+}
+

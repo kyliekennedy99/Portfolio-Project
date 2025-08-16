@@ -1,0 +1,247 @@
+/* ---------------------------------------------------------------------------
+   Checkpoint 4: Level‑2/3 Queries and Stored Procedures
+   AllTrails Hiking App – SQL Server (T‑SQL)
+---------------------------------------------------------------------------*/
+
+-- *** LEVEL‑2 / LEVEL‑3 QUERIES (Q1—Q10) ***********************************
+
+/* Q1 – Average rating for trails with at least 5 reviews (L2) */
+SELECT  T.TrailID,
+        T.Name,
+        AVG(R.Rating)     AS AvgRating,
+        COUNT(*)          AS NumReviews
+FROM    dbo.Trail  AS T
+JOIN    dbo.Review AS R ON R.TrailID = T.TrailID
+GROUP BY T.TrailID, T.Name
+HAVING   COUNT(*) >= 5
+ORDER BY AvgRating DESC;
+GO
+
+/* Q2 – Difficulty distribution for a given trail (L2) */
+DECLARE @TrailID BIGINT = 42;
+SELECT  R.Difficulty,
+        COUNT(*) AS NumReviews
+FROM    dbo.Review AS R
+WHERE   R.TrailID = @TrailID
+GROUP BY R.Difficulty
+ORDER BY NumReviews DESC;
+GO
+
+/* Q3 – Most‑active hikers and their total 3‑D distance (L2) */
+SELECT  U.UserID,
+        U.Name,
+        SUM(T.Length3D) AS TotalDistance_m
+FROM    dbo.Hiker H
+JOIN    dbo.Users U  ON U.UserID  = H.UserID
+JOIN    dbo.Hike  HI ON HI.HikeID = H.HikeID
+JOIN    dbo.Trail T  ON T.TrailID = HI.TrailID
+GROUP BY U.UserID, U.Name
+HAVING   SUM(T.Length3D) > 50000      -- >50 km
+ORDER BY TotalDistance_m DESC;
+GO
+
+/* Q4 – Long (>10 mi) & highly‑rated (>4) trails (L3 – subquery in FROM) */
+SELECT T.TrailID,
+       T.Name,
+       T.Length3D,
+       AR.AvgRating
+FROM  ( SELECT TrailID, AVG(Rating) AS AvgRating
+        FROM dbo.Review
+        GROUP BY TrailID ) AS AR
+JOIN  dbo.Trail AS T ON T.TrailID = AR.TrailID
+WHERE T.Length3D > 16093.44   -- 10 miles in metres
+  AND AR.AvgRating > 4.0;
+GO
+
+/* Q5 – Club membership counts (L2) */
+SELECT  C.ClubID,
+        C.Name,
+        COUNT(*) AS NumMembers
+FROM    dbo.HikingClub C
+JOIN    dbo.Member     M ON M.ClubID = C.ClubID
+GROUP BY C.ClubID, C.Name
+ORDER BY NumMembers DESC;
+GO
+
+/* Q6 – Pairs of users who hiked together (L3 – self‑join) */
+SELECT  U1.Name AS HikerA,
+        U2.Name AS HikerB,
+        HI.TrailID,
+        HI.StartTime
+FROM    dbo.Hiker H1
+JOIN    dbo.Hiker H2
+       ON H1.HikeID = H2.HikeID
+      AND H1.UserID < H2.UserID
+JOIN    dbo.Users U1 ON U1.UserID = H1.UserID
+JOIN    dbo.Users U2 ON U2.UserID = H2.UserID
+JOIN    dbo.Hike  HI ON HI.HikeID = H1.HikeID
+WHERE   DATEDIFF(MINUTE, HI.StartTime, HI.EndTime) > 0;
+GO
+
+/* Q7 – Monthly hike counts in the past 12 months (L2) */
+SELECT  FORMAT(HI.StartTime, 'yyyy-MM') AS YearMonth,
+        COUNT(*)                       AS NumHikes
+FROM    dbo.Hike HI
+WHERE   HI.StartTime >= DATEADD(MONTH, -12, SYSUTCDATETIME())
+GROUP BY FORMAT(HI.StartTime, 'yyyy-MM')
+ORDER BY YearMonth;
+GO
+
+/* Q8 – Elevation-gain ratio per trail (L3 – calc column) */
+SELECT  TrailID,
+        Name,
+        ROUND(Uphill / NULLIF(Length3D,0), 3) AS GainPerMeter
+FROM    dbo.Trail
+WHERE   Length3D > 0
+ORDER BY GainPerMeter DESC;
+GO
+
+/* Q9 – Users who never wrote a review (L2 – outer join) */
+SELECT  U.UserID,
+        U.Name
+FROM    dbo.Users  U
+LEFT  JOIN dbo.Review R ON R.UserID = U.UserID
+WHERE   R.UserID IS NULL;
+GO
+
+/* Q10 – Trails with >3 hikes but zero reviews (L3 – nested subqueries) */
+SELECT T.TrailID,
+       T.Name
+FROM   dbo.Trail T
+WHERE  T.TrailID IN ( SELECT HI.TrailID
+                      FROM   dbo.Hike HI
+                      GROUP  BY HI.TrailID
+                      HAVING COUNT(*) > 3 )
+  AND  NOT EXISTS ( SELECT 1
+                    FROM dbo.Review R
+                    WHERE R.TrailID = T.TrailID );
+GO
+
+-- *** STORED PROCEDURES ****************************************************
+
+/* Utility type for passing participant lists */
+IF TYPE_ID(N'dbo.BigIntList') IS NULL
+    CREATE TYPE dbo.BigIntList AS TABLE (UserID BIGINT PRIMARY KEY);
+GO
+
+/* SP1 – dbo.AddReview: insert or update a review */
+CREATE OR ALTER PROC dbo.AddReview
+    @UserID     BIGINT,
+    @TrailID    BIGINT,
+    @Rating     INT,
+    @Difficulty VARCHAR(255) = NULL,
+    @Comments   VARCHAR(4000) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    MERGE dbo.Review AS T
+    USING (SELECT @UserID AS UserID, @TrailID AS TrailID) AS S
+       ON T.UserID = S.UserID AND T.TrailID = S.TrailID
+    WHEN MATCHED THEN
+        UPDATE SET Rating     = @Rating,
+                   Difficulty = @Difficulty,
+                   Comments   = @Comments
+    WHEN NOT MATCHED THEN
+        INSERT (Comments, Difficulty, Rating, UserID, TrailID)
+        VALUES (@Comments, @Difficulty, @Rating, @UserID, @TrailID);
+END;
+GO
+
+/* SP2 – dbo.GetTrailSummary: aggregated stats for a trail */
+CREATE OR ALTER PROC dbo.GetTrailSummary
+    @TrailID BIGINT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT  T.TrailID,
+            T.Name,
+            AVG(R.Rating)               AS AvgRating,
+            COUNT(R.ReviewID)           AS NumReviews,
+            COUNT(HI.HikeID)            AS NumHikes,
+            MIN(T.MinElevation)         AS MinElevation,
+            MAX(T.MinElevation+T.Uphill)AS MaxElevation
+    FROM    dbo.Trail  T
+    LEFT JOIN dbo.Review R ON R.TrailID = T.TrailID
+    LEFT JOIN dbo.Hike   HI ON HI.TrailID = T.TrailID
+    WHERE   T.TrailID = @TrailID
+    GROUP BY T.TrailID, T.Name;
+END;
+GO
+
+/* SP3 – dbo.RecommendTrailsForUser: top‑N unseen trails */  //done?
+CREATE OR ALTER PROC dbo.RecommendTrailsForUser
+    @UserID BIGINT,
+    @TopN   INT = 5
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    WITH AvgRatings AS (
+        SELECT TrailID, AVG(Rating) AS AvgRating
+        FROM   dbo.Review
+        GROUP  BY TrailID
+    )
+    SELECT TOP (@TopN)
+           T.TrailID,
+           T.Name,
+           AR.AvgRating
+    FROM   dbo.Trail      T
+    JOIN   AvgRatings     AR ON AR.TrailID = T.TrailID
+    WHERE  T.TrailID NOT IN (
+              SELECT HI.TrailID
+              FROM   dbo.Hiker H
+              JOIN   dbo.Hike  HI ON HI.HikeID = H.HikeID
+              WHERE  H.UserID = @UserID
+          )
+    ORDER  BY AR.AvgRating DESC;
+END;
+GO
+
+/* SP4 – dbo.CreateHikeWithParticipants: inserts hike + hikers */
+CREATE OR ALTER PROC dbo.CreateHikeWithParticipants
+    @TrailID      BIGINT,
+    @StartTime    DATETIME2,
+    @EndTime      DATETIME2,
+    @MovingTime   FLOAT,
+    @MaxSpeed     FLOAT,
+    @Participants dbo.BigIntList READONLY
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @HikeID BIGINT;
+
+    INSERT INTO dbo.Hike (MaxSpeed, EndTime, StartTime, MovingTime, TrailID)
+    VALUES (@MaxSpeed, @EndTime, @StartTime, @MovingTime, @TrailID);
+
+    SET @HikeID = SCOPE_IDENTITY();
+
+    INSERT INTO dbo.Hiker (UserID, HikeID)
+    SELECT UserID, @HikeID
+    FROM   @Participants;
+END;
+GO
+
+/* SP5 – dbo.TopClubsByActivity: top clubs by hikes in a date range */
+CREATE OR ALTER PROC dbo.TopClubsByActivity
+    @StartDate DATETIME2,
+    @EndDate   DATETIME2
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT TOP 10
+           HC.ClubID,
+           HC.Name,
+           COUNT(DISTINCT HI.HikeID) AS TotalHikes
+    FROM   dbo.HikingClub HC
+    JOIN   dbo.Member     M  ON M.ClubID = HC.ClubID
+    JOIN   dbo.Hiker      H  ON H.UserID = M.UserID
+    JOIN   dbo.Hike       HI ON HI.HikeID = H.HikeID
+    WHERE  HI.StartTime BETWEEN @StartDate AND @EndDate
+    GROUP  BY HC.ClubID, HC.Name
+    ORDER  BY TotalHikes DESC;
+END;
+GO
