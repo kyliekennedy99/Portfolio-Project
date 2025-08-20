@@ -1,6 +1,7 @@
 // ---------------------------------------------------------------------------
-// RecommendationsPanel.jsx – polished cards + consistent layout
+// RecommendationsPanel.jsx – location-aware recommendations (robust)
 // ---------------------------------------------------------------------------
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useRecommendations } from "../api/api";
 
@@ -12,34 +13,96 @@ const Spinner = () => (
   />
 );
 
-export default function RecommendationsPanel({ userId, topN = 5 }) {
+export default function RecommendationsPanel({
+  userId,
+  topN = 5,
+  radiusKm = 50,
+  minReviews = 3,
+}) {
+  const [coords, setCoords] = useState(null);      // { lat, lng } | null
+  const [locTried, setLocTried] = useState(false); // attempted geolocation?
+
+  // Get the user's location on mount
+  useEffect(() => {
+    let cancelled = false;
+    if (!navigator.geolocation) {
+      setLocTried(true);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (cancelled) return;
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocTried(true);
+      },
+      () => {
+        if (cancelled) return;
+        setCoords(null); // proceed without coords
+        setLocTried(true);
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+    );
+
+    return () => { cancelled = true; };
+  }, []);
+
+  // While verifying: widen radius & allow zero reviews
+  const effectiveRadiusKm = Math.max(radiusKm ?? 0, 30000);
+  const effectiveMinReviews = 0;
+
+  const hasCoords = coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng);
+
+  // Only enable the query when we actually have coords
   const {
-    data: rawRecs,
+    data: rawRecs = [],
     isLoading,
     isError,
     error,
-  } = useRecommendations(userId, topN);
+  } = useRecommendations(userId, topN, hasCoords ? {
+    lat: coords.lat,
+    lng: coords.lng,
+    radiusKm: effectiveRadiusKm,
+    minReviews: effectiveMinReviews,
+  } : undefined);
 
-  // normalize + null-guard
+  // Normalize
   const recs = Array.isArray(rawRecs)
     ? rawRecs.map((r) => {
-        const trailId =
-          r.trailId ?? r.TrailID ?? null; // number or string
+        const trailId = r.trailId ?? r.TrailID ?? null;
         const name = r.name ?? r.Name ?? null;
-        const avg =
-          r.avgRating ?? r.AvgRating ?? null;
 
-        // safe number formatting (avoid NaN)
-        let avgRating = null;
-        if (avg !== null && avg !== undefined) {
-          const n = Number(avg);
-          avgRating = Number.isFinite(n) ? n : null;
-        }
+        const avgNum = Number(r.avgRating ?? r.AvgRating);
+        const avgRating = Number.isFinite(avgNum) ? avgNum : null;
 
-        return { trailId, name, avgRating };
+        const kmNum = Number(r.kmAway ?? r.KmAway ?? r.km);
+        const kmAway = Number.isFinite(kmNum) ? kmNum : null;
+
+        return { trailId, name, avgRating, kmAway };
       })
     : [];
 
+  // UI states
+
+  // 1) We haven't even tried or are waiting for geolocation: show waiting
+  if (!locTried && !hasCoords) {
+    return (
+      <div className="flex items-center justify-center py-8 text-slate-500">
+        <Spinner /> Waiting for location…
+      </div>
+    );
+  }
+
+  // 2) We tried but user denied / unavailable: prompt instead of showing "No recommendations"
+  if (locTried && !hasCoords) {
+    return (
+      <div className="px-4 py-4 text-slate-600">
+        We couldn't access your location. Please allow location in your browser and refresh.
+      </div>
+    );
+  }
+
+  // 3) We have coords and the query is running
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8 text-slate-500">
@@ -48,6 +111,7 @@ export default function RecommendationsPanel({ userId, topN = 5 }) {
     );
   }
 
+  // 4) Error from API
   if (isError) {
     return (
       <p className="px-4 py-4 text-red-600">
@@ -56,10 +120,11 @@ export default function RecommendationsPanel({ userId, topN = 5 }) {
     );
   }
 
-  if (!recs.length) {
+  // 5) We had coords, query ran, but nothing came back
+  if (hasCoords && !recs.length) {
     return (
       <p className="px-4 py-4 text-slate-500">
-        No recommendations yet. Log a hike to get personalized suggestions!
+        No nearby trails matched the filters. Try enlarging the radius or lowering the reviews threshold.
       </p>
     );
   }
@@ -82,9 +147,14 @@ export default function RecommendationsPanel({ userId, topN = 5 }) {
 
   return (
     <section className="space-y-4">
-      <h2 className="text-2xl font-bold text-gray-800 border-b pb-2">
-        🌟 Recommended Trails
-      </h2>
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-2xl font-bold text-gray-800 border-b pb-2">
+          🌟 Recommended Trails
+        </h2>
+        <span className="text-xs text-slate-500">
+          Based on your location (within ~{effectiveRadiusKm} km)
+        </span>
+      </div>
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {unique.map((trail, idx) => {
@@ -96,9 +166,10 @@ export default function RecommendationsPanel({ userId, topN = 5 }) {
                   .replace(/\s+/g, "-")}-${idx}`;
 
           const ratingText =
-            trail.avgRating != null
-              ? trail.avgRating.toFixed(1)
-              : null;
+            trail.avgRating != null ? trail.avgRating.toFixed(1) : null;
+
+          const distanceText =
+            trail.kmAway != null ? `${trail.kmAway.toFixed(1)} km` : null;
 
           const CardInner = (
             <div className="h-full flex flex-col justify-between rounded-xl border bg-white p-4 shadow-sm transition-shadow hover:shadow-lg">
@@ -106,7 +177,7 @@ export default function RecommendationsPanel({ userId, topN = 5 }) {
                 {trail.name ?? "Untitled trail"}
               </h3>
 
-              <div className="mt-auto">
+              <div className="mt-auto flex items-center gap-2 flex-wrap">
                 {ratingText !== null ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                     <span aria-hidden>★</span> {ratingText}
@@ -117,16 +188,18 @@ export default function RecommendationsPanel({ userId, topN = 5 }) {
                     No ratings
                   </span>
                 )}
+
+                {distanceText && (
+                  <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">
+                    {distanceText}
+                  </span>
+                )}
               </div>
             </div>
           );
 
           return trail.trailId ? (
-            <Link
-              key={stableKey}
-              to={`/trails/${trail.trailId}`}
-              className="h-full block"
-            >
+            <Link key={stableKey} to={`/trails/${trail.trailId}`} className="h-full block">
               {CardInner}
             </Link>
           ) : (

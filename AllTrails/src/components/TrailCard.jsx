@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { HeartIcon as SolidHeart } from "@heroicons/react/24/solid";
 import { HeartIcon as OutlineHeart } from "@heroicons/react/24/outline";
 
-export default function TrailCard({ trail }) {
+export default function TrailCard({ trail, isHovered = false }) {
   const [isFavorited, setIsFavorited] = useState(false);
 
   useEffect(() => {
@@ -15,7 +15,6 @@ export default function TrailCard({ trail }) {
     e.preventDefault();
 
     let saved = JSON.parse(localStorage.getItem("favoriteTrails")) || [];
-
     const trailInfo = {
       id: trail.TrailID,
       name: trail.Name?.trim() || `Trail #${trail.TrailID}`,
@@ -34,11 +33,10 @@ export default function TrailCard({ trail }) {
   return (
     <Link
       to={`/trails/${trail.TrailID}`}
-      className="group block rounded-xl shadow hover:shadow-lg transition overflow-hidden relative bg-white"
+      className={`group block rounded-xl transition overflow-hidden relative bg-white 
+        ${isHovered ? "ring-2 ring-emerald-400 shadow-lg" : "shadow"}`}
     >
-      {/* Content */}
       <div className="p-4 h-40 flex flex-col justify-between">
-        {/* Top: Title + Favorite */}
         <div className="flex justify-between items-start">
           <h2 className="text-lg font-semibold text-gray-800 leading-snug">
             {trail.Name?.trim() || `Trail #${trail.TrailID}`}
@@ -56,7 +54,6 @@ export default function TrailCard({ trail }) {
           </button>
         </div>
 
-        {/* Stats */}
         <ul className="text-sm mt-2 space-y-1 text-gray-600">
           <li>
             <strong>Length:</strong> {trail.Length2D?.toFixed(2) ?? "?"} mi

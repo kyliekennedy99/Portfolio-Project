@@ -5,13 +5,13 @@ import MapView from "./MapView";
 import RecommendationsPanel from "./RecommendationsPanel";
 import TopRatedCarousel from "./TopRatedPanel";
 import ChallengeTrailsPanel from "./ChallengeTrailsPanel";
-import ClubSizesPanel from "./ClubSizesPanel"; // (kept import in case you use it)
+import ClubSizesPanel from "./ClubSizesPanel"; // optional
 import SteepTrailsPanel from "./SteepTrailsPanel";
 import UnreviewedTrailsPanel from "./UnreviewedTrailsPanel";
-import ClubLeaderboardPanel from "./ClubLeaderboardPanel"; // (kept import)
+import ClubLeaderboardPanel from "./ClubLeaderboardPanel"; // optional
 import MonthlyTrailStatsPanel from "./MonthlyTrailStatsPanel";
 import MonthlyHikesPanel from "./MonthlyHikesPanel";
-import UsersNoReviewsPanel from "./UsersNoReviewsPanel"; // (kept import)
+import UsersNoReviewsPanel from "./UsersNoReviewsPanel"; // optional
 
 export default function TrailsPage({ currentUser }) {
   const [trails, setTrails] = useState([]);
@@ -21,6 +21,7 @@ export default function TrailsPage({ currentUser }) {
   const [sortOption, setSortOption] = useState("name");
   const [showAllMarkers, setShowAllMarkers] = useState(true);
   const [mapBounds, setMapBounds] = useState(null);
+  const [hoveredTrail, setHoveredTrail] = useState(null); // NEW
 
   const trailsPerPage = 12;
 
@@ -38,7 +39,6 @@ export default function TrailsPage({ currentUser }) {
       .then((data) => setTrails(data))
       .catch((err) => console.error("Error fetching trails:", err));
   }, []);
-console.log("currentUser:", currentUser);
 
   const filteredTrails = useMemo(() => {
     return trails
@@ -80,7 +80,6 @@ console.log("currentUser:", currentUser);
     const indexOfFirst = indexOfLast - trailsPerPage;
     return boundsFilteredTrails.slice(indexOfFirst, indexOfLast);
   }, [boundsFilteredTrails, page]);
-  
 
   return (
     <div className="space-y-12 px-4 py-10 max-w-screen-xl mx-auto">
@@ -138,11 +137,16 @@ console.log("currentUser:", currentUser);
         trails={boundsFilteredTrails}
         onBoundsChange={setMapBounds}
         showAll={showAllMarkers}
+        onTrailHover={setHoveredTrail} // NEW
       />
 
       <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {currentTrails.map((trail) => (
-          <TrailCard key={trail.TrailID} trail={trail} />
+          <TrailCard
+            key={trail.TrailID}
+            trail={trail}
+            isHovered={hoveredTrail === trail.TrailID} // NEW
+          />
         ))}
       </section>
 
@@ -167,14 +171,13 @@ console.log("currentUser:", currentUser);
       </div>
 
       <section className="bg-emerald-50 p-6 rounded-lg shadow-sm">
-  <RecommendationsPanel userId={derivedUserId ?? 1} topN={6} />
-  {!derivedUserId && (
-    <p className="mt-2 text-sm text-slate-600">
-      Showing demo recommendations (no logged-in user detected).
-    </p>
-  )}
-</section>
-
+        <RecommendationsPanel userId={derivedUserId ?? 1} topN={6} />
+        {!derivedUserId && (
+          <p className="mt-2 text-sm text-slate-600">
+            Showing demo recommendations (no logged-in user detected).
+          </p>
+        )}
+      </section>
 
       <div className="space-y-8 mt-12">
         <section className="bg-green-50 p-6 rounded-lg shadow-sm">

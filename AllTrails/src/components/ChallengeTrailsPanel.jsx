@@ -8,7 +8,6 @@ function Spinner() {
 }
 
 export default function ChallengeTrailsPanel({ minMiles = 10, minRating = 3.5, limit = 12 }) {
-
   const {
     data: apiData = [],
     isLoading,
@@ -16,14 +15,17 @@ export default function ChallengeTrailsPanel({ minMiles = 10, minRating = 3.5, l
     error,
   } = useChallengeTrails({ minMiles, minRating });
 
-  // Deduplicate by trail name (if backend didn’t already do this)
+  // Deduplicate by trail name
   const seenNames = new Set();
-  const trails = (apiData ?? []).filter((t) => {
+  let trails = (apiData ?? []).filter((t) => {
     const name = t.name?.trim();
     if (!name || seenNames.has(name)) return false;
     seenNames.add(name);
     return true;
   });
+
+  // Apply the limit
+  trails = trails.slice(0, limit);
 
   if (isLoading)
     return (
@@ -31,12 +33,14 @@ export default function ChallengeTrailsPanel({ minMiles = 10, minRating = 3.5, l
         <Spinner /> Loading challenge trails…
       </p>
     );
+
   if (isError)
     return (
       <p className="py-4 text-red-600">
         Error: {error?.message ?? "unknown error"}
       </p>
     );
+
   if (!trails.length)
     return (
       <p className="py-4 text-slate-500">
@@ -53,7 +57,7 @@ export default function ChallengeTrailsPanel({ minMiles = 10, minRating = 3.5, l
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {trails.map((t) => {
           const miles = t?.lengthMiles != null ? Number(t.lengthMiles).toFixed(1) : "—";
-          const rating = t?.avgRating != null ? Number(t.avgRating).toFixed(1) : "—";
+          const rating = t?.avgRating != null ? Number(t.avgRating).toFixed(2) : "—";
 
           return (
             <Link
@@ -80,4 +84,3 @@ export default function ChallengeTrailsPanel({ minMiles = 10, minRating = 3.5, l
     </section>
   );
 }
-

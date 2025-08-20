@@ -27,17 +27,44 @@ export const useDifficultyDist  = (id)=> useQuery({ queryKey:["trail",id,"diffic
 // Recommendations
 
 
-export function useRecommendations(userId, topN = 5) {
+export function useRecommendations(userId, top = 5, opts = {}) {
+  const {
+    lat,
+    lng,
+    radiusKm = 30000,
+    minReviews = 0,
+  } = opts ?? {};
+
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+
+  // stabilize queryKey to avoid refetch spam from tiny GPS jitter
+  const latQ = hasCoords ? Number(lat.toFixed(5)) : null;
+  const lngQ = hasCoords ? Number(lng.toFixed(5)) : null;
+
   return useQuery({
-    queryKey: ["recs", userId, topN],
-    enabled: Number.isFinite(userId) && userId > 0,
+    queryKey: ["recs", userId, top, latQ, lngQ, radiusKm, minReviews],
+    enabled: Number.isFinite(userId) && userId > 0 && hasCoords,
     queryFn: async () => {
-      const r = await fetch(`http://localhost:3001/api/recommendations?userId=${userId}&topN=${topN}`);
+      const params = new URLSearchParams({
+        userId: String(userId),
+        top: String(top),
+        minReviews: String(minReviews),
+        lat: String(latQ),
+        lng: String(lngQ),
+        radiusKm: String(radiusKm),
+      });
+
+      const r = await fetch(`http://localhost:3001/api/recommendations?${params.toString()}`);
       if (!r.ok) throw new Error("Failed to fetch recommendations");
       return r.json();
     },
+    staleTime: 60_000,         // cache for 1 min
+    keepPreviousData: true,    // smoother UI when options change
+    retry: 1,                  // fail fast if server rejects
   });
 }
+
+
 
 
 // Q1 Top-rated

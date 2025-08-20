@@ -129,25 +129,78 @@ app.get("/api/trails/:id", async (req, res) => {
     res.status(500).send("Database error");
   }
 });
-
-// Recommendations stored proc
+// GET /api/recommendations?userId=1&top=5&minReviews=0&lat=..&lng=..&radiusKm=300
 app.get("/api/recommendations", async (req, res) => {
   try {
-    const userId = parseInt(req.query.userId, 10);
-    const top = parseInt(req.query.top, 10) || 5;
-    const minReviews = parseInt(req.query.minReviews, 10) || 3;
+    const userId     = Number.parseInt(req.query.userId, 10);
+    const top        = Number.isFinite(Number(req.query.top)) ? Number(req.query.top) : 5;
+    const minReviews = Number.isFinite(Number(req.query.minReviews)) ? Number(req.query.minReviews) : 0;
 
-    if (!userId) {
-      return res.status(400).json({ error: "userId is required" });
-    }
+    const norm = (v) => (v == null ? null : Number.parseFloat(String(v).replace(",", ".")));
+    const lat = norm(req.query.lat);
+    const lng = norm(req.query.lng);
+
+    // keep radius as km (float), clamp to sane bounds
+    let radiusKm = Number.parseFloat(req.query.radiusKm);
+    if (!Number.isFinite(radiusKm)) radiusKm = 300;
+    radiusKm = Math.min(Math.max(radiusKm, 0), 20000); // 0..20,000 km
+
+    if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: "userId is required" });
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return res.status(400).json({ error: "lat and lng are required" });
 
     const pool = await poolPromise;
-    const rs = await pool
-      .request()
-      .input("UserID", sql.Int, userId)
-      .input("Top", sql.Int, top)
-      .input("MinReviews", sql.Int, minReviews)
-      .execute("dbo.usp_GetRecommendations");
+
+    const rs = await pool.request()
+      .input("Lat",        sql.Float,  lat)
+      .input("Lng",        sql.Float,  lng)
+      .input("Top",        sql.Int,    top)
+      .input("MinReviews", sql.Int,    minReviews)
+      .input("RadiusKm",   sql.Float,  radiusKm)  // << float km, not int meters
+      .query(`
+        DECLARE @pt geography = geography::Point(@Lat, @Lng, 4326);
+
+        WITH RatingAgg AS (
+          SELECT R.TrailID,
+                 AVG(CAST(R.Rating AS float)) AS avgRating,
+                 COUNT(*)                     AS numReviews
+          FROM dbo.Review AS R
+          GROUP BY R.TrailID
+        ),
+        Qualified AS (
+          SELECT
+            T.TrailID,
+            T.Name,
+            COALESCE(RA.avgRating, 0)  AS avgRating,
+            COALESCE(RA.numReviews, 0) AS numReviews,
+            T.Geog.STDistance(@pt) / 1000.0 AS kmAway  -- distance in KM
+          FROM dbo.Trail AS T
+          LEFT JOIN RatingAgg AS RA
+            ON RA.TrailID = T.TrailID
+          WHERE T.Geog IS NOT NULL
+            AND COALESCE(RA.numReviews, 0) >= @MinReviews
+        ),
+        Dedup AS (
+          SELECT *,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY LTRIM(RTRIM(LOWER(Name)))
+                   ORDER BY avgRating DESC, numReviews DESC, kmAway ASC, TrailID
+                 ) AS rn
+          FROM Qualified
+        )
+        SELECT TOP (@Top)
+               TrailID   AS trailId,
+               Name      AS name,
+               CAST(ROUND(avgRating,2) AS DECIMAL(4,2))  AS avgRating,
+               CAST(ROUND(kmAway,1)    AS DECIMAL(10,1)) AS kmAway
+        FROM Dedup
+        WHERE rn = 1
+        ORDER BY
+          CASE WHEN kmAway <= @RadiusKm THEN 0 ELSE 1 END,  -- inside radius first
+          kmAway ASC,
+          avgRating DESC,
+          numReviews DESC,
+          trailId;
+      `);
 
     res.json(rs.recordset);
   } catch (err) {
@@ -155,6 +208,7 @@ app.get("/api/recommendations", async (req, res) => {
     res.status(500).send("Failed to compute recommendations");
   }
 });
+
 
 
 
