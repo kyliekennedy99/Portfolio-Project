@@ -17,17 +17,6 @@ I've been doing small queries in SSMS, using the version ({ODBC Driver 17 for SQ
 
 For queries that actually interact with frontend I edited them in server.cjs and called them in api.js
 
-FRONTEND:
-
-To help with frontend, I know files are very unorganized but essentially all frontend are under /components:
-TODO:
-TrailCard.jsx is the outer view of a trail, and TrailDetail.jsx is the info that shows when you click on a TrailCard (this is the main file we need to improve)
-- It has queries for Checkpoint 4 used on each TrailDetail and they need to be reformatted.
-- Each query for Checkpoint4 has a panel or page attached to it. (ex: TopHikersPanel.jsx correlates to Q3: Most active hikers)
-ExplorePage.jsx has some example data in it, can be omitted
-
-BACKEND:
-
 The current level 2-3 queries we are using for Checkpoint 4 are: 
 
 1. Top‑rated trails with ≥ minReviews (default 5)
@@ -70,7 +59,6 @@ npm install express mssql cors
 npm install recharts 
 npm i @tanstack/react-query
 
-***Again my understanding of SQL is not the greatest so if it sounds incoherent just ask me questions and I'll try to explain
 
 FOR EASY SETUP IN SSMS;
 - I included db.bacpac which is what I did in SSMS
